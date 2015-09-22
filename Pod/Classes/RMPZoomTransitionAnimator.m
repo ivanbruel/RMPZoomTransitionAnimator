@@ -20,6 +20,12 @@
 
 #import "RMPZoomTransitionAnimator.h"
 
+@interface RMPZoomTransitionAnimator ()
+
+@property (nonatomic, strong) void (^completion)(void);
+
+@end
+
 @implementation RMPZoomTransitionAnimator
 
 // constants for transition animation
@@ -32,94 +38,137 @@ static const NSTimeInterval kBackwardCompleteAnimationDuration = 0.18;
 
 - (NSTimeInterval)transitionDuration:(id <UIViewControllerContextTransitioning>)transitionContext
 {
-    if (self.goingForward) {
-        return kForwardAnimationDuration + kForwardCompleteAnimationDuration;
-    } else {
-        return kBackwardAnimationDuration + kBackwardCompleteAnimationDuration;
-    }
+  if (self.goingForward) {
+    return kForwardAnimationDuration + kForwardCompleteAnimationDuration;
+  } else {
+    return kBackwardAnimationDuration + kBackwardCompleteAnimationDuration;
+  }
 }
 
 - (void)animateTransition:(id<UIViewControllerContextTransitioning>)transitionContext
 {
-    // Setup for animation transition
-    UIViewController *fromVC = [transitionContext viewControllerForKey:UITransitionContextFromViewControllerKey];
-    UIViewController *toVC   = [transitionContext viewControllerForKey:UITransitionContextToViewControllerKey];
-    UIView *containerView    = [transitionContext containerView];
-    [containerView addSubview:fromVC.view];
-    [containerView addSubview:toVC.view];
-    
-    // Without animation when you have not confirm the protocol
-    Protocol *animating = @protocol(RMPZoomTransitionAnimating);
-    BOOL doesNotConfirmProtocol = ![self.sourceTransition conformsToProtocol:animating] || ![self.destinationTransition conformsToProtocol:animating];
-    if (doesNotConfirmProtocol) {
-        [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
-        return;
-    }
-    
-    // Add a alphaView To be overexposed, so background becomes dark in animation
-    UIView *alphaView = [[UIView alloc] initWithFrame:[transitionContext finalFrameForViewController:toVC]];
-    alphaView.backgroundColor = [self.sourceTransition transitionSourceBackgroundColor];
-    [containerView addSubview:alphaView];
-    
-    // Transition source of image to move me to add to the last
-    UIImageView *sourceImageView = [self.sourceTransition transitionSourceImageView];
-    [containerView addSubview:sourceImageView];
-    
-    if (self.goingForward) {
-        [UIView animateWithDuration:kForwardAnimationDuration
-                              delay:0
-                            options:UIViewAnimationOptionCurveEaseOut
-                         animations:^{
-                             sourceImageView.frame = [self.destinationTransition transitionDestinationImageViewFrame];
-                             sourceImageView.transform = CGAffineTransformMakeScale(1.02, 1.02);
-                             alphaView.alpha = 0.9;
-                         }
-                         completion:^(BOOL finished) {
-                             [UIView animateWithDuration:kForwardCompleteAnimationDuration
-                                                   delay:0
-                                                 options:UIViewAnimationOptionCurveEaseOut
-                                              animations:^{
-                                                  alphaView.alpha = 0;
-                                                  sourceImageView.transform = CGAffineTransformIdentity;
-                                              }
-                                              completion:^(BOOL finished) {
-                                                  sourceImageView.alpha = 0;
-                                                  if ([self.destinationTransition conformsToProtocol:@protocol(RMPZoomTransitionAnimating)] &&
-                                                      [self.destinationTransition respondsToSelector:@selector(zoomTransitionAnimator:didCompleteTransition:animatingSourceImageView:)]) {
-                                                      [self.destinationTransition zoomTransitionAnimator:self
-                                                                                   didCompleteTransition:![transitionContext transitionWasCancelled]
-                                                                                animatingSourceImageView:sourceImageView];
-                                                  }
-                                                  [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
-                                              }];
-                         }];
-        
+  // Setup for animation transition
+  UIViewController *fromVC = [transitionContext viewControllerForKey:UITransitionContextFromViewControllerKey];
+  UIViewController *toVC   = [transitionContext viewControllerForKey:UITransitionContextToViewControllerKey];
+  UIView *containerView    = [transitionContext containerView];
+  [containerView addSubview:fromVC.view];
+  [containerView addSubview:toVC.view];
+  
+  // Without animation when you have not confirm the protocol
+  Protocol *animating = @protocol(RMPZoomTransitionAnimating);
+  BOOL doesNotConfirmProtocol = ![self.sourceTransition conformsToProtocol:animating] || ![self.destinationTransition conformsToProtocol:animating];
+  if (doesNotConfirmProtocol) {
+    [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
+    return;
+  }
+  
+  // Add a alphaView To be overexposed, so background becomes dark in animation
+  UIView *alphaView = [[UIView alloc] initWithFrame:[transitionContext finalFrameForViewController:toVC]];
+  alphaView.backgroundColor = [self.sourceTransition transitionSourceBackgroundColor];
+  [containerView addSubview:alphaView];
+  
+  // Transition source of image to move me to add to the last
+  UIImageView *sourceImageView = [self.sourceTransition transitionSourceImageView];
+  [containerView addSubview:sourceImageView];
+  
+  
+  if (self.goingForward) {
+    CGRect destinationFrame = [self.destinationTransition transitionDestinationImageViewFrame];
+    BOOL sourceIsRounded = [self.sourceTransition transitionDestinationImageViewIsRounded];
+    BOOL destinationIsRounded = [self.destinationTransition transitionDestinationImageViewIsRounded];
+    if (sourceIsRounded) {
+      [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationFrame.size.height/2 duration:kForwardAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:^{
+        CGFloat destinationCornerRadius = destinationIsRounded ? destinationFrame.size.height / 2.0 : 0;
+        [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationCornerRadius duration:kForwardCompleteAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:nil];
+      }];
     } else {
-        [UIView animateWithDuration:kBackwardAnimationDuration
-                              delay:0
-                            options:UIViewAnimationOptionCurveEaseOut
-                         animations:^{
-                             sourceImageView.frame = [self.destinationTransition transitionDestinationImageViewFrame];
-                             alphaView.alpha = 0;
-                         }
-                         completion:^(BOOL finished) {
-                             [UIView animateWithDuration:kBackwardCompleteAnimationDuration
-                                                   delay:0
-                                                 options:UIViewAnimationOptionCurveEaseOut
-                                              animations:^{
-                                                  sourceImageView.alpha = 0;
-                                              }
-                                              completion:^(BOOL finished) {
-                                                  if ([self.destinationTransition conformsToProtocol:@protocol(RMPZoomTransitionAnimating)] &&
-                                                      [self.destinationTransition respondsToSelector:@selector(zoomTransitionAnimator:didCompleteTransition:animatingSourceImageView:)]) {
-                                                      [self.destinationTransition zoomTransitionAnimator:self
-                                                                                   didCompleteTransition:![transitionContext transitionWasCancelled]
-                                                                                animatingSourceImageView:sourceImageView];
-                                                  }
-                                                  [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
-                                              }];
-                         }];
+      CGFloat destinationCornerRadius = destinationIsRounded ? destinationFrame.size.height / 2.0 : 0;
+      [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationCornerRadius duration:kForwardCompleteAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:nil];
     }
+    [UIView animateWithDuration:kForwardAnimationDuration
+                          delay:0
+                        options:UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+                       sourceImageView.frame = destinationFrame;
+                       alphaView.alpha = 1.0;
+                     }
+                     completion:^(BOOL finished) {
+                       [UIView animateWithDuration:kForwardCompleteAnimationDuration
+                                             delay:0
+                                           options:UIViewAnimationOptionCurveEaseOut
+                                        animations:^{
+                                          alphaView.alpha = 0;
+                                        }
+                                        completion:^(BOOL finished) {
+                                          sourceImageView.alpha = 0;
+                                          if ([self.destinationTransition conformsToProtocol:@protocol(RMPZoomTransitionAnimating)] &&
+                                              [self.destinationTransition respondsToSelector:@selector(zoomTransitionAnimator:didCompleteTransition:animatingSourceImageView:)]) {
+                                            [self.destinationTransition zoomTransitionAnimator:self
+                                                                         didCompleteTransition:![transitionContext transitionWasCancelled]
+                                                                      animatingSourceImageView:sourceImageView];
+                                          }
+                                          [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
+                                        }];
+                     }];
+    
+  } else {
+    CGRect destinationFrame = [self.destinationTransition transitionDestinationImageViewFrame];
+    BOOL sourceIsRounded = [self.sourceTransition transitionDestinationImageViewIsRounded];
+    BOOL destinationIsRounded = [self.destinationTransition transitionDestinationImageViewIsRounded];
+    if (destinationIsRounded) {
+      [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationFrame.size.height/2 duration:kBackwardAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:^{
+        CGFloat destinationCornerRadius = destinationIsRounded ? destinationFrame.size.height / 2.0 : 0;
+        [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationCornerRadius duration:kBackwardCompleteAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:nil];
+      }];
+    } else {
+      CGFloat destinationCornerRadius = destinationIsRounded ? destinationFrame.size.height / 2.0 : 0;
+      [self animateImageView:sourceImageView fromCornerRadius:sourceImageView.layer.cornerRadius toCornerRadius:destinationCornerRadius duration:kBackwardCompleteAnimationDuration animationCurve:[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut] completion:nil];
+    }
+    [UIView animateWithDuration:kBackwardAnimationDuration
+                          delay:0
+                        options:UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+                       sourceImageView.frame = destinationFrame;
+                       alphaView.alpha = 0;
+                     }
+                     completion:^(BOOL finished) {
+                       [UIView animateWithDuration:kBackwardCompleteAnimationDuration
+                                             delay:0
+                                           options:UIViewAnimationOptionCurveEaseOut
+                                        animations:^{
+                                          sourceImageView.alpha = 0;
+                                        }
+                                        completion:^(BOOL finished) {
+                                          if ([self.destinationTransition conformsToProtocol:@protocol(RMPZoomTransitionAnimating)] &&
+                                              [self.destinationTransition respondsToSelector:@selector(zoomTransitionAnimator:didCompleteTransition:animatingSourceImageView:)]) {
+                                            [self.destinationTransition zoomTransitionAnimator:self
+                                                                         didCompleteTransition:![transitionContext transitionWasCancelled]
+                                                                      animatingSourceImageView:sourceImageView];
+                                          }
+                                          [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
+                                        }];
+                     }];
+  }
+}
+
+- (void)animateImageView:(UIImageView *)imageView fromCornerRadius:(CGFloat)fromCornerRadius toCornerRadius:(CGFloat)toCornerRadius duration:(CGFloat)duration animationCurve:(CAMediaTimingFunction *)animationCurve completion:(void(^)(void))completion {
+  self.completion = completion;
+  CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
+  animation.timingFunction = [CAMediaTimingFunction     functionWithName:kCAMediaTimingFunctionLinear];
+  animation.fromValue = [NSNumber numberWithFloat:fromCornerRadius];
+  animation.toValue = [NSNumber numberWithFloat:toCornerRadius];
+  animation.timingFunction = animationCurve;
+  animation.duration = duration;
+  animation.delegate = self;
+  [imageView.layer addAnimation:animation forKey:@"cornerRadius"];
+  [imageView.layer setCornerRadius:toCornerRadius];
+}
+
+- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag
+{
+  if (self.completion) {
+    self.completion();
+  }
 }
 
 @end

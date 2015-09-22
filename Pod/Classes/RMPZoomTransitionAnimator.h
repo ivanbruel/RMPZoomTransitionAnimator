@@ -58,6 +58,8 @@
  */
 - (CGRect)transitionDestinationImageViewFrame;
 
+- (BOOL)transitionDestinationImageViewIsRounded;
+
 @end
 
 
@@ -97,7 +99,7 @@
  The animator's delegate for transition in source view controller.
  
  You need to set this property and implement the RMPZoomTransitionAnimating in source view controller.
-*/
+ */
 @property (nonatomic, weak) id <RMPZoomTransitionAnimating, RMPZoomTransitionDelegate> sourceTransition;
 
 /**
